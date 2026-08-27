@@ -16,7 +16,7 @@ ifndef config
     config := $(MEMPOOL_CONFIGURATION)
   else
     # Default configuration, if neither `config` nor `MEMPOOL_CONFIGURATION` was found
-    config := mempool
+    config := terapool
   endif
 endif
 include $(MEMPOOL_DIR)/config/$(config).mk
@@ -87,4 +87,4 @@ tile_id_remap ?= 0
 spm_profiling ?= 0
 
 # Enable the interconnect access pattern profiling
-noc_profiling ?= 0
+noc_profiling ?= 1

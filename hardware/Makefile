@@ -32,8 +32,11 @@ questa_cmd       ?= questa-$(questa_version)
 questa_args      ?=
 questa_config    ?=
 # VCS Configuration
-vcs_version      ?= 2024.09-zr
-vcs_cmd          ?= vcs-$(vcs_version)
+VCS_HOME         ?= /eda/installed_tools/vcs/X-2025.06-SP1
+VERDI_HOME       ?= /eda/installed_tools/verdi/X-2025.06
+LM_LICENSE_FILE  ?= 27008@synopsysls.s.uw.edu
+VCS_TARGET_ARCH  ?= amd64
+VCS_ENV          := PATH=$(VCS_HOME)/bin:$(VERDI_HOME)/bin:$$PATH VCS_HOME=$(VCS_HOME) VERDI_HOME=$(VERDI_HOME) LM_LICENSE_FILE=$(LM_LICENSE_FILE) VCS_TARGET_ARCH=$(VCS_TARGET_ARCH)
 vcs_config       ?=
 vcs_gui          ?= -verdi
 # Path to the application binaries
@@ -61,7 +64,6 @@ ifeq (, $(shell which $(questa_cmd)))
 endif
 # Simulation tool environment paths
 QUESTASIM_HOME  ?= /usr/pack/questa-$(questa_version)/questasim
-VCS_HOME        ?= /usr/pack/vcs-$(vcs_version)/vcs
 
 # ============================================================================
 # Application and Preload Handling
@@ -87,6 +89,10 @@ endif
 ifdef preload
   questa_args += +PRELOAD=$(preload)
 endif
+# Optional deadlock watchdog: stop the sim after N cycles without EOC.
+ifdef max_cycles
+  questa_args += +max_cycles=$(max_cycles)
+endif
 questa_args += -sv_lib $(dpi_library)/mempool_dpi -work $(library)
 questa_args += -suppress vsim-12070
 
@@ -96,6 +102,10 @@ questa_args += -suppress vsim-12070
 vlogan_args += -assert svaext +v2k -override_timescale=1ns/1ps -kdb
 ifdef preload
   vcs_args += +PRELOAD=$(preload)
+endif
+# Optional deadlock watchdog: stop the sim after N cycles without EOC.
+ifdef max_cycles
+  vcs_args += +max_cycles=$(max_cycles)
 endif
 vcs_assert_args ?= -assert nopostproc
 vcs_args        += $(vcs_assert_args)
@@ -213,13 +223,24 @@ vlog_defs += -DNOC_ROUTER_REMAP_GROUP_SIZE=$(noc_router_remap_group_size)
 # Traffic Generation
 # --------------------------
 ifdef tg
-	tg_ncycles ?= 10000
+	tg_ncycles        ?= 10000
+	tg_pattern        ?= 0
+	tg_nn_dir         ?= 0
+	tg_nn_wrap        ?= 1
+	tg_tile_mesh_x    ?= 4
+	tg_tiles_per_group := $(shell echo $$(( $(num_cores) / $(num_cores_per_tile) / $(num_groups) )))
 	vlog_defs += -DTRAFFIC_GEN=1
 	cpp_defs  += -DTRAFFIC_GEN=1
 	cpp_defs  += -DTG_REQ_PROB=$(tg_reqprob)
 	cpp_defs  += -DTG_SEQ_PROB=$(tg_seqprob)
+	cpp_defs  += -DTG_PATTERN=$(tg_pattern)
+	cpp_defs  += -DTG_NN_DIR=$(tg_nn_dir)
+	cpp_defs  += -DTG_NN_WRAP=$(tg_nn_wrap)
+	cpp_defs  += -DTG_TILE_MESH_X=$(tg_tile_mesh_x)
 	cpp_defs  += -DTG_NCYCLES=$(tg_ncycles)
 	cpp_defs  += -DNUM_CORES=$(num_cores)
+	cpp_defs  += -DNUM_CORES_PER_TILE=$(num_cores_per_tile)
+	cpp_defs  += -DNUM_TILES_PER_GROUP=$(tg_tiles_per_group)
 	# Simulation termination
 	veril_flags := --term-after-cycles=$(tg_ncycles)
 else
@@ -347,12 +368,9 @@ $(buildpath)/$(dpi_library)/mempool_dpi.so: $(dpi)
 .PHONY: elabvcs
 elabvcs: dpivcs $(buildpath) $(buildpath)/compilevcs.sh update_opcodes
 $(buildpath)/compilevcs.sh: $(bender) $(config_mk) Makefile $(MEMPOOL_DIR)/Bender.yml $(shell find {src,tb,deps} -type f)
-	$(bender) script vcs --vlogan-bin="$(vcs_cmd) vlogan" --vlog-arg="$(vlogan_args)" $(vlog_defs) -t rtl -t mempool_vsim > $(buildpath)/compilevcs.sh
-	echo "exit" >> $(buildpath)/compilevcs.sh
-	# Call VCS
-	cd $(buildpath) && \
-	chmod +x compilevcs.sh && \
-	./compilevcs.sh
+	$(bender) script vcs --vlogan-bin="vlogan" --vlog-arg="$(vlogan_args)" $(vlog_defs) -t rtl -t mempool_vsim > $(buildpath)/compilevcs.sh
+	chmod +x $(buildpath)/compilevcs.sh
+	cd $(buildpath) && $(VCS_ENV) bash compilevcs.sh
 
 # Compilation
 .PHONY: compile_vcs_simv compile_vcs_simvopt
@@ -360,27 +378,28 @@ $(buildpath)/compilevcs.sh: $(bender) $(config_mk) Makefile $(MEMPOOL_DIR)/Bende
 compile_vcs_simv: update-floogen elabvcs $(buildpath)/mempool_simv
 $(buildpath)/mempool_simv: $(buildpath)/compilevcs.sh $(buildpath)/$(dpi_library)/mempool_vcs_dpi.so
 	cd $(buildpath) && \
-	$(vcs_cmd) vcs -full64 $(top_level) -cc $(CC) -cpp $(CXX) -ld $(CXX) $(dpi_library)/mempool_vcs_dpi.so $(vcs_config) -debug_access+all -kdb -assert disable_cover -o mempool_simv
+	$(VCS_ENV) vcs -full64 $(top_level) -cc $(CC) -cpp $(CXX) -ld $(CXX) $(dpi_library)/mempool_vcs_dpi.so $(vcs_config) -debug_access+all -kdb -assert disable_cover -o mempool_simv
 
 compile_vcs_simvopt: update-floogen elabvcs $(buildpath)/mempool_simvopt
 $(buildpath)/mempool_simvopt: $(buildpath)/compilevcs.sh $(buildpath)/$(dpi_library)/mempool_vcs_dpi.so
 	cd $(buildpath) && \
-	$(vcs_cmd) vcs -full64 $(top_level) -cc $(CC) -cpp $(CXX) -ld $(CXX) $(dpi_library)/mempool_vcs_dpi.so $(vcs_config) -assert disable_cover -o mempool_simvopt
+	$(VCS_ENV) vcs -full64 $(top_level) -cc $(CC) -cpp $(CXX) -ld $(CXX) $(dpi_library)/mempool_vcs_dpi.so $(vcs_config) -assert disable_cover -o mempool_simvopt
 
 # Simulation
+.PHONY: simvcs simcvcs simcvcs_fsdb show-vcs clean-vcs
 simvcs: clean-dasm compile_vcs_simv
 	cd $(buildpath) && \
-	./mempool_simv $(vcs_args) $(vcs_gui) -ucli -do ../scripts/vcs/run.tcl -l transcript
+	$(VCS_ENV) ./mempool_simv $(vcs_args) $(vcs_gui) -ucli -do ../scripts/vcs/run.tcl -l transcript
 	./scripts/return_status.sh $(buildpath)/transcript
 
 simcvcs: clean-dasm compile_vcs_simvopt
 	cd $(buildpath) && \
-	./mempool_simvopt $(vcs_args) -l transcript
+	$(VCS_ENV) ./mempool_simvopt $(vcs_args) -l transcript
 	./scripts/return_status.sh $(buildpath)/transcript
 
 simcvcs_fsdb: clean-dasm compile_vcs_simv
 	cd $(buildpath) && \
-	./mempool_simv $(vcs_args) -ucli -do ../scripts/vcs/dump_all.tcl -l transcript
+	$(VCS_ENV) ./mempool_simv $(vcs_args) -ucli -do ../scripts/vcs/dump_all.tcl -l transcript
 	./scripts/return_status.sh $(buildpath)/transcript
 
 # DPIs
@@ -394,6 +413,18 @@ $(buildpath)/$(dpi_library)/%_vcs.o: tb/dpi/%.cpp
 $(buildpath)/$(dpi_library)/mempool_vcs_dpi.so: $(dpi_vcs)
 	mkdir -p $(buildpath)/$(dpi_library)
 	$(CXX) -shared -m64 -o $(buildpath)/$(dpi_library)/mempool_vcs_dpi.so $^
+
+# Waveform viewing with Verdi
+show-vcs:
+	@test -f $(buildpath)/waveform.fsdb || { echo "Missing FSDB: $(buildpath)/waveform.fsdb. Run 'make simcvcs_fsdb' first."; exit 1; }
+	$(VCS_ENV) verdi -ssf $(abspath $(buildpath)/waveform.fsdb)
+
+# Clean VCS build artifacts
+clean-vcs:
+	@rm -rf $(buildpath)
+	@rm -rf AN.DB
+	@rm -f ucli.key
+	@rm -f vc_hdrs.h
 
 ################
 # Verilator    #
@@ -455,6 +486,25 @@ verilate: $(VERILATOR_EXE) $(buildpath) Makefile
 	cd $(buildpath) && $(VERILATOR_EXE) $(veril_flags) | tee transcript
 	# Avoid capturing the return status when running the load-throughput analysis
 	if [ $(tg) -ne 1 ]; then ./scripts/return_status.sh $(buildpath)/transcript; fi
+
+.PHONY: verilate_bifurcation simcvcs_bifurcation
+BIFURCATION_HW_OPTS = stack_size=2048 seq_mem_size=2048 snitch_trace=0
+
+verilate_bifurcation:
+	$(MAKE) -C $(MEMPOOL_DIR)/software/apps/baremetal bifurcation \
+		BIFURCATION_LATTICE=$(BIFURCATION_LATTICE) \
+		BIFURCATION_SIM_ITER=$(BIFURCATION_SIM_ITER)
+	rm -f $(VERILATOR_MK)
+	$(MAKE) $(BIFURCATION_HW_OPTS) app=apps/baremetal/bifurcation \
+		update-floogen $(VERILATOR_MK) $(VERILATOR_EXE) verilate
+
+simcvcs_bifurcation:
+	$(MAKE) -C $(MEMPOOL_DIR)/software/apps/baremetal bifurcation \
+		BIFURCATION_LATTICE=$(BIFURCATION_LATTICE) \
+		BIFURCATION_SIM_ITER=$(BIFURCATION_SIM_ITER)
+	rm -f $(buildpath)/compilevcs.sh $(buildpath)/mempool_simvopt
+	$(MAKE) $(BIFURCATION_HW_OPTS) app=apps/baremetal/bifurcation \
+		compile_vcs_simvopt simcvcs
 
 #############
 # Lint      #

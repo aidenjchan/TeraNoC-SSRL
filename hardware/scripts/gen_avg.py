@@ -9,8 +9,7 @@
 # Author: Marco Bertuletti <mbertuletti@iis.ee.ethz.ch>
 
 import os
-import pandas as pd
-import numpy as np
+import csv
 import argparse
 
 ext = ('.csv')
@@ -26,36 +25,45 @@ args = parser.parse_args()
 os.chdir(args.folder)
 path = os.getcwd()
 print(path)
-for files in os.listdir(path):
-    if files.endswith(ext):
-        csvread = pd.read_csv(files)
 
-        print("\n")
-        print("*******************************")
-        print("**    AVERAGE PERFORMANCE    **")
-        print("*******************************")
+remove_keys = {'core', 'section', 'start', 'end',
+               'snitch_load_latency', 'snitch_load_region',
+               'snitch_load_tile', 'snitch_store_region',
+               'snitch_store_tile'}
 
-        print("")
-        for section in set(csvread['section']):
-            print("Section %d:\n" % section)
-            sectionread = csvread.loc[csvread['section'] == section]
-            keys = csvread.columns
-            remove_keys = ['core',
-                           'section',
-                           'start',
-                           'end',
-                           'snitch_load_latency',
-                           'snitch_load_region',
-                           'snitch_load_tile',
-                           'snitch_store_region',
-                           'snitch_store_tile']
-            keys = keys.drop(remove_keys, errors='raise')
-            for key in keys:
-                try:
-                    column = sectionread[key].replace(np.nan, 0)
-                    column = column.to_numpy()
-                    avg = np.average(column)
-                except Exception:
-                    # Key could not be averaged
-                    continue
-                print("%-30s %4.4f" % (key, avg))
+for fname in os.listdir(path):
+    if not fname.endswith(ext):
+        continue
+    with open(fname, 'r') as f:
+        reader = csv.DictReader(f)
+        headers = reader.fieldnames
+        rows = list(reader)
+
+    sections = sorted(set(int(r['section']) for r in rows))
+
+    print("\n")
+    print("*******************************")
+    print("**    AVERAGE PERFORMANCE    **")
+    print("*******************************")
+    print("")
+
+    for section in sections:
+        print("Section %d:\n" % section)
+        section_rows = [r for r in rows if int(r['section']) == section]
+        n = len(section_rows)
+        if n == 0:
+            continue
+        keys = [k for k in headers if k not in remove_keys]
+        for key in keys:
+            try:
+                values = []
+                for r in section_rows:
+                    val = r[key]
+                    if val == '' or val == 'nan':
+                        values.append(0.0)
+                    else:
+                        values.append(float(val))
+                avg = sum(values) / len(values)
+            except (ValueError, TypeError, ZeroDivisionError):
+                continue
+            print("%-30s %4.4f" % (key, avg))

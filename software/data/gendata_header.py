@@ -209,6 +209,7 @@ if __name__ == '__main__':
         "barriers_test": {"func": datalib.generate_barriers_test},
         "softmax_f8": {"func": datalib.generate_fsoftmax},
         "softmax_f16": {"func": datalib.generate_fsoftmax},
+        "bifurcation": {"func": datalib.generate_bifurcation},
     }
 
     # Check if app_name exists in the function map

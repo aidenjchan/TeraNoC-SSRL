@@ -280,7 +280,7 @@ $(info FLOO_DIR: $(FLOO_DIR))
 .PHONY: update-floonoc clean-floonoc
 update-floonoc: $(FLOO_NOC)
 $(FLOO_NOC): $(FLOO_CFG)
-	PYTHONPATH=$(FLOO_DIR) python3 -m floogen.cli pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR)
+	PYTHONPATH=$(FLOO_DIR) python3.11 -m floogen.cli pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR)
 
 # Helper targets
 .PHONY: clean format apps

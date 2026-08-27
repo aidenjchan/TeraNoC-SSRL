@@ -5,6 +5,7 @@
 // Author: Matheus Cavalcante, ETH Zurich
 
 // Includes
+#include <algorithm>
 #include <iostream>
 #include <limits.h>
 #include <map>
@@ -42,6 +43,24 @@ void print_histogram();
 #define TG_SEQ_PROB 0
 #endif
 
+// Traffic pattern: 0 = uniform random (optional local via TG_SEQ_PROB),
+//                  1 = nearest-neighbor (adjacent tile in intra-group mesh)
+#ifndef TG_PATTERN
+#define TG_PATTERN 0
+#endif
+
+// Nearest-neighbor direction when TG_PATTERN == 1:
+//   0 = +X (east), 1 = -X (west), 2 = +Y (south), 3 = -Y (north),
+//   4 = rotate by core_id % 4
+#ifndef TG_NN_DIR
+#define TG_NN_DIR 0
+#endif
+
+// Wrap mesh edges within the group (1) or clamp to the source tile at borders (0)
+#ifndef TG_NN_WRAP
+#define TG_NN_WRAP 1
+#endif
+
 // Number of cycles the simulation has ran
 #ifndef TG_NCYCLES
 #define TG_NCYCLES 10000
@@ -50,6 +69,19 @@ void print_histogram();
 // Number of cores
 #ifndef NUM_CORES
 #define NUM_CORES 256
+#endif
+
+#ifndef NUM_CORES_PER_TILE
+#define NUM_CORES_PER_TILE 4
+#endif
+
+#ifndef NUM_TILES_PER_GROUP
+#define NUM_TILES_PER_GROUP 16
+#endif
+
+// Side length of the intra-group tile mesh (terapool: 4x4 tiles per group)
+#ifndef TG_TILE_MESH_X
+#define TG_TILE_MESH_X 4
 #endif
 
 // Randomizer
@@ -77,6 +109,56 @@ std::map<core_id_t, std::queue<request_t>> requests;
 // Transaction IDs
 uint32_t tran_id_initialized = 0;
 std::map<core_id_t, std::queue<req_id_t>> tran_id;
+
+static addr_t encode_tile_addr(addr_t addr, addr_t tile_mask, addr_t tile_id) {
+  const unsigned shift = __builtin_ctz(tile_mask);
+  return (addr & ~tile_mask) | ((tile_id << shift) & tile_mask);
+}
+
+static uint32_t global_tile_id(core_id_t core_id) {
+  return core_id / NUM_CORES_PER_TILE;
+}
+
+static uint32_t nearest_neighbor_tile_id(core_id_t core_id) {
+  const uint32_t global_tile = global_tile_id(core_id);
+  const uint32_t group_id = global_tile / NUM_TILES_PER_GROUP;
+  const uint32_t local_tile = global_tile % NUM_TILES_PER_GROUP;
+  const uint32_t mesh_x = TG_TILE_MESH_X;
+  const uint32_t mesh_y = NUM_TILES_PER_GROUP / mesh_x;
+
+  uint32_t x = local_tile % mesh_x;
+  uint32_t y = local_tile / mesh_x;
+
+  const uint32_t dir =
+      (TG_NN_DIR == 4) ? (core_id % 4) : (TG_NN_DIR % 4);
+
+  switch (dir) {
+  case 0:
+    if (TG_NN_WRAP || x + 1 < mesh_x)
+      x += 1;
+    break; // east (+X)
+  case 1:
+    if (TG_NN_WRAP || x > 0)
+      x -= 1;
+    break; // west (-X)
+  case 2:
+    if (TG_NN_WRAP || y + 1 < mesh_y)
+      y += 1;
+    break; // south (+Y)
+  default:
+    if (TG_NN_WRAP || y > 0)
+      y -= 1;
+    break; // north (-Y)
+  }
+
+  if (TG_NN_WRAP) {
+    x %= mesh_x;
+    y %= mesh_y;
+  }
+
+  const uint32_t neighbor_local = y * mesh_x + x;
+  return group_id * NUM_TILES_PER_GROUP + neighbor_local;
+}
 
 extern "C" void create_request(const core_id_t *core_id, const uint32_t *cycle,
                                const addr_t *tcdm_base_addr,
@@ -110,11 +192,18 @@ extern "C" void create_request(const core_id_t *core_id, const uint32_t *cycle,
       next_request.addr =
           (next_request.addr & ~(*tcdm_mask)) | (*tcdm_base_addr & *tcdm_mask);
 
+#if TG_PATTERN == 1
+      // Each core issues loads to a physically adjacent tile in the
+      // intra-group tile mesh (1-hop NoC traffic).
+      next_request.addr = encode_tile_addr(
+          next_request.addr, *tile_mask, nearest_neighbor_tile_id(*core_id));
+#elif TG_SEQ_PROB > 0
       // Should the request be in the sequential region?
       if (real_dist(e1) < TG_SEQ_PROB) {
         next_request.addr =
             (next_request.addr & ~(*tile_mask)) | (*seq_mask & *tile_mask);
       }
+#endif
 
       // Address is aligned to 32 bits
       next_request.addr = (next_request.addr >> 2) << 2;
@@ -171,16 +260,36 @@ extern "C" void probe_response(const core_id_t *core_id, const uint32_t *cycle,
 extern "C" void print_histogram() {
   uint32_t latency = 0;
   uint32_t tran_counter = 0;
+  uint32_t max_latency = 0;
+
+#if TG_PATTERN == 1
+  std::cout << "Pattern: nearest_neighbor (intra-group mesh, TG_NN_DIR="
+            << TG_NN_DIR << ", wrap=" << TG_NN_WRAP << ")" << std::endl;
+#else
+  std::cout << "Pattern: uniform (TG_SEQ_PROB=" << TG_SEQ_PROB << ")"
+            << std::endl;
+#endif
+  std::cout << "Offered load (req prob): " << TG_REQ_PROB << std::endl;
+  std::cout << "Total cycles: " << TG_NCYCLES << std::endl;
 
   std::cout << "Latency\tCount" << std::endl;
   for (const auto &it : latency_histogram) {
     tran_counter += it.second;
     latency += it.first * it.second;
+    max_latency = std::max(max_latency, it.first);
     std::cout << it.first << "\t" << it.second << std::endl;
+  }
+
+  if (tran_counter == 0) {
+    std::cout << "Average latency: nan" << std::endl;
+    std::cout << "Max latency: nan" << std::endl;
+    std::cout << "Throughput: 0" << std::endl;
+    return;
   }
 
   std::cout << "Average latency: " << (1.0 * latency) / tran_counter
             << std::endl;
+  std::cout << "Max latency: " << max_latency << std::endl;
   std::cout << "Throughput: " << (1.0 * tran_counter) / (TG_NCYCLES * NUM_CORES)
             << std::endl;
 }

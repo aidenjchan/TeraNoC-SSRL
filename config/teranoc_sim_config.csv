@@ -1,0 +1,101 @@
+category,parameter,value,unit,notes
+meta,config_flavor,terapool,,Base Makefile config name
+meta,bench_name,fig8_teranoc,,Name in hardware/scripts/bench_config.json (matches default terapool narrow settings)
+meta,channel_config_mode,narrow,,Enables USE_NARROW_REQ_CHANNEL; options: baseline | narrow | enhanced
+meta,l2_sim_type,sram,,On-chip SRAM model; set to dram for DRAMsys co-simulation
+meta,git_commit_recent_runs,13d89b3,,Short hash from recent result dirs (e.g. gemv_f16_13d89b3)
+hierarchy,num_cores,1024,cores,
+hierarchy,num_groups,16,groups,
+hierarchy,num_cores_per_tile,4,cores,
+hierarchy,num_tiles,256,tiles,Derived: num_cores / num_cores_per_tile
+hierarchy,num_tiles_per_group,16,tiles,Derived: num_tiles / num_groups
+hierarchy,num_cores_per_group,64,cores,Derived: num_cores / num_groups
+hierarchy,banking_factor,4,banks per core,L1 scratchpad banking factor
+hierarchy,total_l1_banks,4096,banks,Derived: num_cores * banking_factor
+hierarchy,banks_per_tile,16,banks,Derived: total_l1_banks / num_tiles
+hierarchy,banks_per_group,256,banks,Derived: total_l1_banks / num_groups
+hierarchy,l1_bank_size,1024,bytes,1 KiB per bank
+hierarchy,total_l1_size,4194304,bytes,4 MiB total TCDM
+hierarchy,intra_group_interconnect,LIC,,Logarithmic crossbar (variable_latency_interconnect) within each group
+topology,num_x,4,,Groups in X direction (4x4 group mesh)
+topology,num_y,4,,Groups in Y direction; derived: num_groups / num_x
+topology,num_directions,5,ports,N/E/S/W + eject per router
+topology,noc_topology,0,,0 = 2D mesh; 1 = torus
+routers,tcdm_router_type,floo_router (32-bit TCDM),,Intra-cluster group-to-group mesh
+routers,axi_router_type,floo_terapool_noc (narrow-wide AXI),,Cluster-to-L2/memory mesh; generated from config/floo_noc_terapool.yml
+routers,tcdm_link_width,32,bits,Core/SPM and TCDM NoC flit width
+routers,axi_wide_link_width,512,bits,DMA and L2 data path
+routers,axi_narrow_link_width,64,bits,AXI control channels (from floo_noc_terapool.yml)
+routers,group_router_mesh,4x4,,16 group routers in 2D mesh
+routers,l2_slave_endpoints,16,,hbm0-hbm15 at mesh edges
+channels,noc_req_rd_channel_num,1,channels,Dedicated read-only request channel (narrow mode)
+channels,noc_req_rdwr_channel_num,1,channels,Read/write request channel (narrow mode)
+channels,noc_req_wr_channel_num,0,channels,No write-only channel
+channels,noc_resp_channel_num,2,channels,Response channels
+channels,noc_virtual_channel_num,1,VCs,Single virtual channel per physical link
+channels,remote_req_ports_per_tile,3,ports,1 local + 1 narrow read + 1 wide rd/wr
+channels,remote_resp_ports_per_tile,3,ports,1 local + 2 remote response
+remapping,noc_router_remapping,3,,0=none; 1=req; 2=resp; 3=req+resp (active)
+remapping,noc_router_remap_group_size,4,tiles,4x4 remapping sub-mesh within each 16-tile group
+remapping,spm_bank_id_remap,0,,Off
+remapping,tile_id_remap,0,,Off
+buffers,noc_router_input_fifo_dep,2,flits,Input FIFO depth per router
+buffers,noc_router_output_fifo_dep,2,flits,Output FIFO depth per router
+routing,noc_routing_algorithm,0,,0 = XY (dimension-order); 1 = id_table
+routing,axi_mesh_route_algo,SRC,,From floo_noc_terapool.yml
+routing,axi_mesh_use_id_table,true,,From floo_noc_terapool.yml
+arbitration,strategy,round-robin,,rr_arb_tree in floo_wormhole_arbiter
+arbitration,wormhole_lock,true,,LockIn enabled; holds grant for full packet
+arbitration,vc_arbiter,rr_arb_tree,,Used when noc_virtual_channel_num > 1
+memory_l1,banks,4096,banks,
+memory_l1,size_per_bank,1024,bytes,
+memory_l1,total_size,4194304,bytes,4 MiB
+memory_l1,data_width,32,bits,
+memory_l1,backend,tc_sram,,1-cycle read model
+memory_l2,total_size,16777216,bytes,16 MiB
+memory_l2,num_banks,16,banks,
+memory_l2,size_per_bank,1048576,bytes,1 MiB per bank
+memory_l2,data_width_per_bank,512,bits,
+memory_l2,base_address,0x80000000,hex,
+memory_l2,interleave_granularity,16,bytes,axi_width_interleaved
+memory_l2,backend,sram,,Ideal SRAM via tc_sram; not DRAMsys
+memory_l2,latency_model,1-cycle SRAM + AXI pipeline,,No HBM/DDR timing in sram mode
+axi_dma,axi_data_width,512,bits,
+axi_dma,ro_line_width,512,bits,Read-only cache line width
+axi_dma,axi_hier_radix,17,,Hierarchical AXI interconnect radix
+axi_dma,axi_masters_per_group,1,,
+axi_dma,dmas_per_group,1,,
+axi_dma,dma_burst_length,16,beats,Derived from group/bank geometry
+axi_dma,l2_base,2147483648,decimal,0x80000000
+core_isa,xpulpimg,1,,Enabled
+core_isa,zfinx,1,,Enabled
+core_isa,zquarterinx,0,,Disabled
+core_isa,xDivSqrt,0,,Disabled
+core_isa,num_divsqrt_per_tile,1,,Default when xDivSqrt enabled
+cache,icache_size_per_core,512,bytes,
+cache,icache_size_per_tile,2048,bytes,512 B x 4 cores
+cache,ro_cache_size,8192,bytes,8 KiB
+cache,ro_cache_ways,2,ways,
+cache,ro_cache_line_width,512,bits,
+sequential_mem,seq_mem_size,512,bytes per core,Power-of-two
+sequential_mem,stack_size,512,bytes per core,
+sequential_mem,boot_addr,2684354560,decimal,0xA0000000
+latency,remote_group_latency_cycles,7,cycles,RemoteGroupLatencyCycle default; lightly used in RTL
+latency,l2_axi_cut_mst_ports,true,,Some AXI paths add 1-cycle pipeline (CUT_MST_PORTS)
+bench_variant,fig8_teranoc_req_rd,1,channels,Primary config (matches default terapool narrow)
+bench_variant,fig8_teranoc_req_rdwr,1,channels,
+bench_variant,fig8_teranoc_resp,2,channels,
+bench_variant,fig8_teranoc_remapping,3,,
+bench_variant,base_rmpoff_req_rd,0,channels,Baseline comparison config
+bench_variant,base_rmpoff_req_rdwr,2,channels,
+bench_variant,base_rmpoff_resp,2,channels,
+bench_variant,base_rmpoff_remapping,0,,
+bench_variant,base_rmp4_req_rd,0,channels,Baseline + remapping comparison config
+bench_variant,base_rmp4_req_rdwr,2,channels,
+bench_variant,base_rmp4_resp,2,channels,
+bench_variant,base_rmp4_remapping,3,,
+source_file,architecture,config/terapool.mk,,
+source_file,global_defaults,config/config.mk,,
+source_file,axi_mesh_topology,config/floo_noc_terapool.yml,,
+source_file,bench_sweeps,hardware/scripts/bench_config.json,,
+source_file,rtl_parameters,hardware/src/mempool_pkg.sv,,

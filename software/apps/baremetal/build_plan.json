@@ -80,14 +80,10 @@
           {"matrix_M": 2048, "matrix_N": 384}
         ],
         "matmul_f32": [
-          {"matrix_M": 256, "matrix_N": 256, "matrix_P": 256},
-          {"matrix_M": 256, "matrix_N": 128, "matrix_P": 256},
-          {"matrix_M": 128, "matrix_N": 128, "matrix_P": 128}
+          {"matrix_M": 512, "matrix_N": 256, "matrix_P": 512}
         ],
         "matmul_f16": [
-          {"matrix_M": 256, "matrix_N": 256, "matrix_P": 256},
-          {"matrix_M": 256, "matrix_N": 128, "matrix_P": 256},
-          {"matrix_M": 128, "matrix_N": 128, "matrix_P": 128}
+          {"matrix_M": 512, "matrix_N": 512, "matrix_P": 512}
         ],
         "mimo_mmse_f32": [
           {"N_TX": 8, "N_RX": 16, "N_ITR": 1024}

@@ -1,0 +1,6 @@
+Pattern: nearest_neighbor (intra-group mesh, TG_NN_DIR=0, wrap=1)
+Offered load (req prob): 0.02
+Total cycles: 10000
+Average latency: 3.03264
+Max latency: 6
+Throughput: 0.0200242

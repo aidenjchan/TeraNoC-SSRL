@@ -1,0 +1,7 @@
+req_prob=0.4
+config=terapool
+tg_pattern=1
+tg_nn_dir=0
+tg_nn_wrap=1
+tg_ncycles=10000
+timestamp=2026-07-09T19:52:46-07:00

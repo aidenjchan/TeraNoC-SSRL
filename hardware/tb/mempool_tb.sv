@@ -70,6 +70,31 @@ module mempool_tb;
     rst_n = 1'b1;
   end
 
+  // Optional deadlock watchdog. Disabled by default; enable by passing
+  // +max_cycles=<N> on the simulator command line. When the design runs longer
+  // than N cycles without reaching EOC (e.g. a barrier deadlock) the simulation
+  // is stopped with an error instead of spinning forever.
+  longint unsigned watchdog_max_cycles;
+  longint unsigned watchdog_cycle_cnt;
+  initial begin
+    if (!$value$plusargs("max_cycles=%d", watchdog_max_cycles))
+      watchdog_max_cycles = 0;
+  end
+  // Counter is driven exclusively inside this always_ff (reset synchronously)
+  // to avoid a multiple-driver violation during elaboration.
+  always_ff @(posedge clk) begin
+    if (!rst_n) begin
+      watchdog_cycle_cnt <= 0;
+    end else if (watchdog_max_cycles != 0) begin
+      watchdog_cycle_cnt <= watchdog_cycle_cnt + 1;
+      if (watchdog_cycle_cnt >= watchdog_max_cycles) begin
+        $error("[WATCHDOG] Reached %0d cycles without EOC - likely deadlock. Stopping simulation.",
+               watchdog_max_cycles);
+        $finish(1);
+      end
+    end
+  end
+
   // Passing the clock and reset to the DRAM simulation engine
   `ifdef DRAM
     dram_sim_engine #(.ClkPeriodNs(ClockPeriod)) i_dram_sim_engine (.clk_i(clk), .rst_ni(rst_n));

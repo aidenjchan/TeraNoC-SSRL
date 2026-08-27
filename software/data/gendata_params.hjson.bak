@@ -22,7 +22,7 @@
   "axpy_f32": {
     "type": "float32",
     "defines": [
-      ("array_N", 385024)
+      ("array_N", 1024)
     ]
     "arrays": [
       ("float", "l2_A")
@@ -35,7 +35,7 @@
   "axpy_f16": {
     "type": "float16",
     "defines": [
-      ("array_N", 770048)
+      ("array_N", 1024)
     ]
     "arrays": [
       ("__fp16", "l2_A")
@@ -61,7 +61,7 @@
   "dotp_f16": {
     "type": "float16",
     "defines": [
-      ("array_N", 770048)
+      ("array_N", 1024)
     ]
     "arrays": [
       ("__fp16", "l2_X")
@@ -207,7 +207,7 @@
   "dotp_f32": {
     "type": "float32",
     "defines": [
-      ("array_N", 385024)
+      ("array_N", 1024)
     ]
     "arrays": [
       ("float", "l2_X")
@@ -231,9 +231,9 @@
   "conv2d_f32": {
     "type": "float32",
     "defines": [
-      ("matrix_M", 1024)
-      ("matrix_N", 24)
-      ("kernel_K", 27)
+      ("matrix_M", 20)
+      ("matrix_N", 4096)
+      ("kernel_K", 3)
     ]
     "arrays": [
       ("float", "l2_A")
@@ -245,9 +245,9 @@
   "conv2d_f16": {
     "type": "float16",
     "defines": [
-      ("matrix_M", 144)
-      ("matrix_N", 35)
-      ("kernel_K", 221)
+      ("matrix_M", 20)
+      ("matrix_N", 8192)
+      ("kernel_K", 4)
     ]
     "arrays": [
       ("float", "l2_A")
@@ -285,9 +285,9 @@
   "matmul_f16": {
     "type": "float16",
     "defines": [
-      ("matrix_M", 512)
-      ("matrix_N", 512)
-      ("matrix_P", 512)
+      ("matrix_M", 32)
+      ("matrix_N", 32)
+      ("matrix_P", 32)
     ]
     "arrays": [
       ("__fp16", "l2_A")
@@ -299,9 +299,9 @@
   "matmul_f32": {
     "type": "float32",
     "defines": [
-      ("matrix_M", 512)
-      ("matrix_N", 256)
-      ("matrix_P", 512)
+      ("matrix_M", 16)
+      ("matrix_N", 16)
+      ("matrix_P", 16)
     ]
     "arrays": [
       ("float", "l2_A")
@@ -355,8 +355,8 @@
   "gemv_f32": {
     "type": "float32",
     "defines": [
-      ("matrix_N", 4096)
-      ("matrix_P", 192)
+      ("matrix_N", 128)
+      ("matrix_P", 32)
     ]
     "arrays": [
       ("float", "l2_A")
@@ -368,8 +368,8 @@
   "gemv_f16": {
     "type": "float16",
     "defines": [
-      ("matrix_N", 8192)
-      ("matrix_P", 192)
+      ("matrix_N", 256)
+      ("matrix_P", 32)
     ]
     "arrays": [
       ("__fp16", "l2_A")
@@ -559,22 +559,6 @@
     "arrays": [
       ("__fp16", "l2_A")
       ("__fp16", "l2_B")
-    ]
-  },
-
-  "bifurcation": {
-    "type": "float32",
-    "defines": [
-      ("sb_a", 15)
-      ("sb_b", 7.5)
-      ("sb_c", 0)
-      ("num_iter", 100)
-      ("init_seed", 42)
-    ]
-    "arrays": [
-      ("uint32_t", "l2_row_ptr")
-      ("uint32_t", "l2_col_idx")
-      ("float", "l2_x_init")
     ]
   },
 

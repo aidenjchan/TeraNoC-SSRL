@@ -17,8 +17,8 @@
 // Macros
 #define UNROLL (BANKING_FACTOR)
 #define N (NUM_CORES * BANKING_FACTOR)
-#define TARGET_MEMPOOL (1)
-#define TARGET_TERAPOOL (0)
+#define TARGET_MEMPOOL (0)
+#define TARGET_TERAPOOL (1)
 
 // Globals
 int32_t block_a[N]

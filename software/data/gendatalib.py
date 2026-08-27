@@ -914,3 +914,57 @@ def generate_fsoftmax(my_type=np.float32, defines={}):
         B = np.reshape(B, (matrix_M * matrix_N), order='C')
 
     return [A, B], defines
+
+
+def generate_bifurcation(my_type=np.float32, defines={}):
+    """Load g4096_lattice graph and build CSR adjacency for SB max-cut."""
+
+    import os
+
+    lattice_path = defines.get(
+        "lattice_path",
+        os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "matlab_scripts",
+            "bifurcation",
+            "g4096_lattice.txt",
+        ),
+    )
+
+    with open(lattice_path, "r") as f:
+        tokens = [int(x) for x in f.read().split()]
+
+    num_nodes = tokens[0]
+    num_edges = tokens[1]
+    edges = np.array(tokens[2:], dtype=np.int32).reshape(num_edges, 3)
+
+    # Build CSR adjacency (1-based node IDs in file → 0-based indices).
+    neighbors = [[] for _ in range(num_nodes)]
+    for u, v, w in edges:
+        u -= 1
+        v -= 1
+        neighbors[u].append(v)
+        neighbors[v].append(u)
+
+    row_ptr = np.zeros(num_nodes + 1, dtype=np.uint32)
+    col_idx = []
+    offset = 0
+    for i in range(num_nodes):
+        row_ptr[i] = offset
+        nbrs = sorted(set(neighbors[i]))
+        col_idx.extend(nbrs)
+        offset += len(nbrs)
+    row_ptr[num_nodes] = offset
+    col_idx = np.array(col_idx, dtype=np.uint32)
+
+    # Initial spins: sign(randn(N, 1)) with fixed seed for reproducibility.
+    rng = np.random.default_rng(defines.get("init_seed", 42))
+    x_init = np.sign(rng.standard_normal(num_nodes)).astype(my_type)
+    x_init[x_init == 0] = 1.0
+
+    defines["num_nodes"] = num_nodes
+    defines["num_edges"] = num_edges
+    defines["optimal_cut"] = num_edges
+    defines["csr_nnz"] = len(col_idx)
+
+    return [row_ptr, col_idx, x_init], defines
