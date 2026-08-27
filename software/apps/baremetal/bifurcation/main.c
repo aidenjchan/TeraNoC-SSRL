@@ -22,6 +22,7 @@
 #define SB_NUM_ITER num_iter
 #endif
 
+
 float x_curr[num_nodes]
     __attribute__((aligned(4 * NUM_BANKS), section(".l2")));
 float x_next[num_nodes]
